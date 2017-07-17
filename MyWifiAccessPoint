@@ -1,0 +1,189 @@
+///* Create a WiFi access point and provide a web server on it. */
+//
+#include <ArduinoJson.h>
+#include <ESP8266WiFi.h>
+#include <WiFiClient.h> 
+#include <ESP8266WebServer.h>
+#include <ESP8266HTTPClient.h>
+//
+///* Set these to your desired credentials. */
+const char *ssid = "ESP8266";
+const char *password = "00000000";
+char JSONMessage[]="";
+StaticJsonBuffer<500> jsonBuffer; 
+ESP8266WebServer server(80);
+const int led = 2;
+const int temp = 0;
+String sendProm,comProm,prompt,jsonInvalid;   
+String authorized;
+String unauthorized;
+String PowerOnString;
+String PowerOffString;
+int say,i,tempInfo=0;
+String value;
+String TempAmount;
+const char arti='+';
+ /* void handleRoot();              // function prototypes for HTTP handlers
+  void handleLED();
+  void handleNotFound();*/
+/* Just a little test message.  Go to http://192.168.4.1 in a web browser
+ * connected to this access point to see it.
+ */
+ 
+void setup() {
+  delay(1000);
+  Serial.begin(115200);
+  pinMode(led, OUTPUT);
+  pinMode(temp,INPUT);
+  Serial.print("Configuring access point...");
+  /* You can remove the password parameter if you want the AP to be open. */
+  WiFi.softAP(ssid);
+
+  IPAddress myIP = WiFi.softAPIP();
+  Serial.print("AP IP address: ");
+  Serial.println(myIP);
+
+ delay(1000);
+  server.on("/", HTTP_GET, handleRoot);
+  server.on("/login", HTTP_POST, handleLogin); // Call the 'handleLogin' function when a POST request is made to URI "/login"
+  server.on("/main", HTTP_POST, handleLED);  // Call the 'handleLED' function when a POST request is made to URI "/LED"
+  server.on("/update",HTTP_GET, handleUpdate);
+  server.on("/temp",HTTP_POST, handleTemp);
+  server.on("/prompt",HTTP_POST, handlePrompt);
+  server.onNotFound(handleNotFound);        // When a client requests an unknown URI (i.e. something other than "/"), call function "handleNotFound"
+  server.begin();
+  Serial.println("HTTP server started");
+  /*int j=10;
+  for(byte i=0;i<10;i++){delay(1000);  Serial.println(j); j--;}*/
+ // delay(1000);
+    WiFi.softAP(ssid,password);
+  tempInfo = ((analogRead(temp)* (0.48828125))/10.0);
+   JsonObject& root = jsonBuffer.createObject();
+        root["status"]="200";
+        root["username"] = "TEKSAV";
+        root["password"] = "9999";
+        root.printTo(authorized);     
+   JsonObject& invalid = jsonBuffer.createObject();
+        invalid["status"]="400";
+        invalid["text"] = "Invalid Request";
+        invalid.printTo(jsonInvalid); 
+   JsonObject&  jsonUnauthorized = jsonBuffer.createObject();
+        jsonUnauthorized["status"]="401";
+        jsonUnauthorized["text"] = "Unauthorized";           
+        jsonUnauthorized.printTo(unauthorized);  
+    JsonObject& jsonPowerOn = jsonBuffer.createObject();
+        jsonPowerOn["power"] =1;        
+        jsonPowerOn.printTo(PowerOnString);
+    JsonObject& jsonPowerOff = jsonBuffer.createObject();
+        jsonPowerOff["power"] =0;
+        jsonPowerOff.printTo(PowerOffString);
+   
+        delay(2000);
+  
+  
+}
+void loop() {
+  server.handleClient();    // Listen for HTTP requests from clients  
+  //" <form action=\"/login\" method=\"POST\" enctype=\"application/json\"><input type=\"text\" name=\"username\" placeholder=\"Username\"></br><input type=\"password\" name=\"password\" placeholder=\"Password\"></br><input type=\"submit\" value=\"Login\"></form><p>Try 'TEKSAV' and '9999' ...</p>
+}  
+
+void handleRoot() { 
+  server.send(200, "text/plain","200: Succesful" );  // server a baglanti basarili kodu gonderiliyor.
+}
+ 
+void handleLogin() {                         // If a POST request is made to URI /login
+                  
+   if( ! server.hasArg("username") || ! server.hasArg("password") 
+      || server.arg("username") == NULL || server.arg("password") == NULL) { // If the POST request doesn't have username and password data         
+        Serial.println(jsonInvalid);
+        server.send(400, "application/json",jsonInvalid );  // The request is invalid, so send HTTP status 400     
+         return;
+  }
+  if(server.arg("username") == "TEKSAV" && server.arg("password") == "9999") { // If both the username and the password are correct
+          Serial.println(authorized);
+          server.send(200, "application/json",authorized );  // server a json yÃ¼kleniyor.
+  } else {                                                                              // Username and password don't match                    
+        Serial.println(unauthorized);
+        server.send(401, "application/json",unauthorized );  // server a json yÃ¼kleniyor.
+    delay(5000);
+  }
+}
+
+void handleLED(){    // If a POST request is made to URI /LED
+      if( ! server.hasArg("power") ||  server.arg("power") == NULL) { // If the POST request doesn't have led data
+         server.send(400, "application/json",jsonInvalid );  // server a json yÃ¼kleniyor.
+      } 
+      if(server.arg("power") == "on") { // If led is ON
+         digitalWrite(led,HIGH);  // Set led ON
+         
+         Serial.println(PowerOnString);
+         server.send(200, "application/json",PowerOnString );  // send json to server.           
+      }else if(server.arg("power") == "off"){
+        digitalWrite(led,LOW);  // Set led OFF  
+        
+        Serial.println(PowerOffString);       
+        server.send(200, "application/json",PowerOffString );  // send json to server.     
+        }else{
+            server.send(400, "application/json",jsonInvalid );  // If the POST request doesn't have led=ON/OFF data
+          } 
+//  digitalWrite(led,!digitalRead(led));      // Change the state of the LED
+//  server.sendHeader("Location","/");        // Add a header to respond with a new location for the browser to go to the home page again
+//  server.send(303);                         // Send it back to the browser with an HTTP status 303 (See Other) to redirect
+}
+void handleUpdate(){    // If a GET request is made to URI /Temp 
+     JsonObject& jsonPower = jsonBuffer.createObject();
+        jsonPower["power"] = digitalRead(led);
+        jsonPower["temp"] = ((analogRead(temp)* (0.48828125))/10.0);
+        String PowerString;
+        jsonPower.printTo(PowerString);
+        Serial.println(PowerString);
+          server.send(200, "application/json",PowerString );  // server a json yÃ¼kleniyor.
+}
+void handleTemp(){   
+   value = server.arg("amount");
+      if( ! server.hasArg("amount") ||  server.arg("amount") == NULL) { // If the POST request doesn't have led data
+         server.send(400, "application/json",jsonInvalid );  // server a json yÃ¼kleniyor.
+      } 
+      if(server.arg("amount") == value) { // If led is ON
+        // digitalWrite(led,HIGH);  // Set led ON
+        JsonObject& jsonTemp = jsonBuffer.createObject();
+        jsonTemp["amount"] = value;        
+        jsonTemp.printTo(TempAmount);
+         Serial.println(TempAmount);
+         server.send(200, "application/json",TempAmount);  // send json to server.           
+      }
+}
+void handlePrompt(){   
+   value = server.arg("prompt");
+      if( ! server.hasArg("prompt") ||  server.arg("prompt") == NULL) { // If the POST request doesn't have led data
+         server.send(400, "application/json",jsonInvalid );  // server a json yÃ¼kleniyor.
+      } 
+      if(server.arg("prompt") == value) { // dort arti yontemi ile alınan promptlarin '+' lardan arindirilmasi
+        int sizeVal=value.length();
+        for(i=0;i<=sizeVal;i++){ 
+         if(char(value[i])==arti){
+           say++;   
+          if(say==4){
+            for(say;say<=sizeVal;say++){
+             prompt += (char(value[say]));
+          }                    
+         
+        }else{
+          server.send(400, "application/json",jsonInvalid );
+          }  
+       }else{
+        say=0;
+        }     
+     }
+        JsonObject& jsonPro = jsonBuffer.createObject();
+        jsonPro["prompt"] = prompt;        
+        jsonPro.printTo(sendProm);
+         Serial.println(sendProm);
+         server.send(200, "application/json",sendProm);  // send json to server.    
+         prompt="";    
+         sendProm="";   
+      }
+}
+void handleNotFound(){
+  server.send(404, "text/plain", "404: Not found"); // Send HTTP status 404 (Not Found) when there's no handler for the URI in the request
+}
